@@ -54,9 +54,15 @@ straight-line curve you can then drag into shape.
 The card (`custom:heating-curve-card`) is registered automatically by the
 integration — no separate HACS Frontend install, no manual Resources step.
 
-Check **Settings → Devices & Services → Heating Curve → \<your curve name\>**
-to see the exact entity IDs that were created (they follow the pattern
-`number.<device>_point_@_x_c`), then add to your dashboard in YAML mode:
+Right after setup finishes, the integration sends a **notification** (bell
+icon, top right) with a ready-to-paste YAML block that already has the
+correct entity IDs filled in — no need to hunt through Developer Tools.
+Open a dashboard, **Edit Dashboard → Edit in YAML**, and paste the block
+into any section's `cards:` list.
+
+If you ever need it again, or the notification was dismissed before you
+copied it, check **Settings → Devices & Services → Heating Curve →
+\<your curve name\>** to see the exact entity IDs, and use this template:
 
 ```yaml
 type: custom:heating-curve-card

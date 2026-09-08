@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import timedelta
 from pathlib import Path
@@ -21,6 +22,8 @@ from .const import (
     CONF_OUTSIDE_SENSOR,
     CONF_POINT_COUNT,
     CONF_REGISTER,
+    CONF_Y_MAX,
+    CONF_Y_MIN,
     DOMAIN,
     FRONTEND_JS_FILENAME,
     FRONTEND_URL_BASE,
@@ -114,6 +117,77 @@ class HeatingCurveManager:
             _LOGGER.exception("Heating Curve: failed to write modbus register")
 
 
+async def _wait_for_entity_ids(manager: "HeatingCurveManager", timeout: float = 5.0) -> bool:
+    elapsed = 0.0
+    while elapsed < timeout:
+        if manager.target_entity and manager.target_entity.entity_id:
+            if manager.points and all(p.entity_id for p in manager.points.values()):
+                return True
+        await asyncio.sleep(0.1)
+        elapsed += 0.1
+    return False
+
+
+def _build_card_yaml(entry: ConfigEntry, manager: "HeatingCurveManager") -> str:
+    cfg = entry.data
+    point_count = cfg[CONF_POINT_COUNT]
+    grid_min = cfg[CONF_GRID_MIN]
+    grid_max = cfg[CONF_GRID_MAX]
+    step = (grid_max - grid_min) / (point_count - 1) if point_count > 1 else 0
+
+    lines = [
+        "type: custom:heating-curve-card",
+        f"title: {entry.title}",
+        'unit: "°C"',
+        f"y_min: {cfg[CONF_Y_MIN]:g}",
+        f"y_max: {cfg[CONF_Y_MAX]:g}",
+        "service_domain: number",
+        f"current_x_entity: {cfg[CONF_OUTSIDE_SENSOR]}",
+    ]
+    if manager.target_entity is not None and manager.target_entity.entity_id:
+        lines.append(f"current_y_entity: {manager.target_entity.entity_id}")
+    lines.append("points:")
+    for i in range(point_count):
+        x = round(grid_min + step * i, 1)
+        point = manager.points.get(i)
+        entity_id = point.entity_id if point and point.entity_id else "unknown.entity"
+        lines.append(f"  - x: {x:g}")
+        lines.append(f"    entity: {entity_id}")
+
+    return "\n".join(lines)
+
+
+async def _async_notify_dashboard_card(
+    hass: HomeAssistant, entry: ConfigEntry, manager: "HeatingCurveManager"
+) -> None:
+    ready = await _wait_for_entity_ids(manager)
+    if not ready:
+        _LOGGER.warning(
+            "Heating Curve (%s): entities did not finish registering in time; "
+            "skipping the ready-made dashboard card notification. Check "
+            "Developer Tools > States for the entity IDs manually.",
+            entry.title,
+        )
+        return
+
+    yaml_text = _build_card_yaml(entry, manager)
+    message = (
+        f"Your **{entry.title}** curve is set up. Add this card to your "
+        f"dashboard: open a dashboard, **Edit Dashboard → Edit in YAML**, "
+        f"and paste this into a section's `cards:` list:\n\n"
+        f"```yaml\n{yaml_text}\n```"
+    )
+    await hass.services.async_call(
+        "persistent_notification",
+        "create",
+        {
+            "title": f"Heating Curve — {entry.title}: dashboard card ready",
+            "message": message,
+            "notification_id": f"heating_curve_card_{entry.entry_id}",
+        },
+    )
+
+
 async def _async_register_frontend(hass: HomeAssistant) -> None:
     if hass.data.get(DOMAIN, {}).get("_frontend_registered"):
         return
@@ -163,6 +237,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(remove_interval)
 
     await manager.async_recompute_and_apply()
+
+    hass.async_create_task(_async_notify_dashboard_card(hass, entry, manager))
 
     return True
 
