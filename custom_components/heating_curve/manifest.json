@@ -1,0 +1,12 @@
+{
+  "domain": "heating_curve",
+  "name": "Heating Curve (Weather Compensation)",
+  "version": "1.0.0",
+  "documentation": "https://github.com/<YOUR_GITHUB_USER>/<YOUR_REPO>",
+  "issue_tracker": "https://github.com/<YOUR_GITHUB_USER>/<YOUR_REPO>/issues",
+  "codeowners": ["@<YOUR_GITHUB_USER>"],
+  "config_flow": true,
+  "dependencies": ["modbus"],
+  "iot_class": "local_polling",
+  "requirements": []
+}

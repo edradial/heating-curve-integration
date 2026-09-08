@@ -1,0 +1,26 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up Heating Curve",
+        "description": "Configure a weather-compensation curve that writes its computed setpoint to a Modbus holding register.",
+        "data": {
+          "name": "Name",
+          "point_count": "Number of curve points",
+          "grid_min": "Outdoor temperature at the coldest point (°C)",
+          "grid_max": "Outdoor temperature at the warmest point (°C)",
+          "y_min": "Minimum allowed setpoint (°C)",
+          "y_max": "Maximum allowed setpoint (°C)",
+          "outside_sensor": "Outdoor temperature sensor",
+          "modbus_hub": "Modbus hub name",
+          "register_address": "Setpoint holding register address",
+          "modbus_unit": "Modbus slave/unit ID",
+          "onoff_entity": "On/off switch (optional — only applies while on)"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This hub/register combination is already configured."
+    }
+  }
+}
