@@ -12,6 +12,7 @@ from homeassistant.helpers.event import (
     async_track_state_change_event,
     async_track_time_interval,
 )
+from homeassistant.helpers.storage import Store
 
 from .const import (
     CONF_GRID_MAX,
@@ -27,6 +28,8 @@ from .const import (
     DOMAIN,
     FRONTEND_JS_FILENAME,
     FRONTEND_URL_BASE,
+    STORAGE_KEY_TEMPLATE,
+    STORAGE_VERSION,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -42,6 +45,18 @@ class HeatingCurveManager:
         self.entry = entry
         self.points: dict[int, "HeatingCurvePoint"] = {}
         self.target_entity = None
+        self.store: Store = Store(
+            hass, STORAGE_VERSION, STORAGE_KEY_TEMPLATE.format(entry.entry_id)
+        )
+        self.stored_values: dict[str, float] = {}
+
+    async def async_load_stored_values(self) -> None:
+        data = await self.store.async_load()
+        self.stored_values = data or {}
+
+    async def async_save_point(self, index: int, value: float) -> None:
+        self.stored_values[str(index)] = value
+        await self.store.async_save(self.stored_values)
 
     def register_point(self, index: int, entity) -> None:
         self.points[index] = entity
@@ -221,6 +236,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     manager = HeatingCurveManager(hass, entry)
     hass.data[DOMAIN][entry.entry_id] = manager
+    await manager.async_load_stored_values()
 
     # number platform must finish registering points before sensor platform
     # (which only reads point values, never creates them) is set up.

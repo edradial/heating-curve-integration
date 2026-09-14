@@ -23,3 +23,6 @@ PLATFORMS_SENSOR = ["sensor"]
 
 FRONTEND_URL_BASE = "/heating_curve_frontend"
 FRONTEND_JS_FILENAME = "heating-curve-card.js"
+
+STORAGE_VERSION = 1
+STORAGE_KEY_TEMPLATE = "heating_curve_points_{}"

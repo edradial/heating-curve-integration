@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from homeassistant.components.number import RestoreNumber
+from homeassistant.components.number import NumberEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
@@ -32,27 +32,38 @@ async def async_setup_entry(
     entities = []
     for i in range(point_count):
         x = round(grid_min + step * i, 1)
-        # sensible default: linear from y_max at the coldest point to y_min
-        # at the warmest point — the user drags it into shape afterwards
-        default_val = (
+        # sensible fallback default (only used the very first time, before
+        # any value has ever been saved for this point): linear from y_max
+        # at the coldest point to y_min at the warmest point
+        computed_default = (
             round(y_max - (y_max - y_min) * (i / (point_count - 1)), 1)
             if point_count > 1
             else y_max
         )
-        ent = HeatingCurvePoint(entry, manager, i, x, y_min, y_max, default_val)
+        stored = manager.stored_values.get(str(i))
+        initial_val = stored if stored is not None else computed_default
+
+        ent = HeatingCurvePoint(entry, manager, i, x, y_min, y_max, initial_val)
         manager.register_point(i, ent)
         entities.append(ent)
 
     async_add_entities(entities)
 
 
-class HeatingCurvePoint(RestoreNumber):
-    """A single draggable point on the weather compensation curve."""
+class HeatingCurvePoint(NumberEntity):
+    """A single draggable point on the weather compensation curve.
+
+    Persistence is handled explicitly by HeatingCurveManager (via a
+    dedicated Store, saved immediately on every change) rather than via
+    Home Assistant's generic RestoreEntity mechanism, which only dumps
+    state periodically / on clean shutdown and can lose a very recent
+    change if Home Assistant is restarted shortly after a drag.
+    """
 
     _attr_has_entity_name = True
     _attr_native_step = 1
 
-    def __init__(self, entry, manager, index, x, y_min, y_max, default_val):
+    def __init__(self, entry, manager, index, x, y_min, y_max, initial_val):
         self._entry = entry
         self._manager = manager
         self._index = index
@@ -61,7 +72,7 @@ class HeatingCurvePoint(RestoreNumber):
         self._attr_native_min_value = y_min
         self._attr_native_max_value = y_max
         self._attr_native_unit_of_measurement = "°C"
-        self._attr_native_value = default_val
+        self._attr_native_value = initial_val
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -71,13 +82,8 @@ class HeatingCurvePoint(RestoreNumber):
             manufacturer="Heating Curve",
         )
 
-    async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
-        last = await self.async_get_last_number_data()
-        if last is not None and last.native_value is not None:
-            self._attr_native_value = last.native_value
-
     async def async_set_native_value(self, value: float) -> None:
         self._attr_native_value = value
         self.async_write_ha_state()
+        await self._manager.async_save_point(self._index, value)
         await self._manager.async_recompute_and_apply()
